@@ -143,12 +143,11 @@ if uploaded:
 
         st.subheader(f"📈 Visão: {titulo_calc}")
 
-    ) 
-st.dataframe(
+    
+        st.dataframe(
     df_out,
     use_container_width=True
 )
-
 
         # Download
         buffer = io.BytesIO()
