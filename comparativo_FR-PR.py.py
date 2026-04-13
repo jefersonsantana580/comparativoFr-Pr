@@ -15,9 +15,9 @@ st.set_page_config(
 )
 
 st.title("Comparativo Request Vs Plan")
-st.caption("Comparativo entre cenários com filtros e resumos")
+st.caption("Comparativo entre cenários com filtros, resumos e exportação")
 
-PT_BR_MESES = ["jan","fev","mar","abr","mai","jun","jul","ago","set","out","nov","dez"]
+PT_BR_MESES = ["jan", "fev", "mar", "abr", "mai", "jun", "jul", "ago", "set", "out", "nov", "dez"]
 
 MES_RE = re.compile(
     r'^(jan|fev|mar|abr|mai|jun|jul|ago|set|out|nov|dez)/\d{2}$',
@@ -28,7 +28,6 @@ MES_RE = re.compile(
 # FUNÇÕES UTILITÁRIAS
 # =====================================================
 def _normalize_header(col):
-    # Caso venha como data
     if isinstance(col, (pd.Timestamp, dt.date)):
         return f"{PT_BR_MESES[col.month-1]}/{col.year % 100:02d}"
 
@@ -90,6 +89,36 @@ def formatar_tabela(df):
         styler = styler.map(colorir_valores, subset=cols_num)
     else:
         styler = styler.applymap(colorir_valores, subset=cols_num)
+
+    styler = (
+        styler
+        .set_properties(subset=cols_num, **{"text-align": "center"})
+        .set_properties(subset=df.columns.difference(cols_num), **{"text-align": "left"})
+    )
+
+    return styler
+
+
+def colorir_percent(val):
+    """Cores para percentuais: <100 vermelho; >=100 verde."""
+    if isinstance(val, (int, float)):
+        if val < 100:
+            return "color:red;font-weight:bold;"
+        return "color:green;font-weight:bold;"
+    return ""
+
+
+def formatar_tabela_percent(df):
+    """Formata tabela de percentuais no padrão 90% / 100%."""
+    df = df.fillna(0)
+    cols_num = df.select_dtypes(include="number").columns
+
+    styler = df.style.format(lambda x: f"{x:.0f}%", subset=cols_num)
+
+    if hasattr(styler, "map"):
+        styler = styler.map(colorir_percent, subset=cols_num)
+    else:
+        styler = styler.applymap(colorir_percent, subset=cols_num)
 
     styler = (
         styler
@@ -236,13 +265,11 @@ def gerar_passo1(xlsx_bytes, show_debug=False, visao="Request - Plan", incluir_o
 
     # =================================================
     # RESUMO POR PRODUCT NEED (COMP - BASE)
-    #
-    # CORREÇÃO: Calculado a partir do detalhado, garantindo que o TOTAL por SITE
-    # feche com a soma das linhas do detalhado (evita divergências como no print).
+    # CORREÇÃO: calculado a partir do detalhado para sempre fechar.
     # =================================================
     grp_need = ["SITE", "PRODUCT NEED"]
-
     step1_serie_sem_total = step1_serie[step1_serie["SITE"].astype(str).str.upper() != "TOTAL GERAL"].copy()
+
     step1_need = (
         step1_serie_sem_total[grp_need + meses]
         .groupby(grp_need, dropna=False)[meses]
@@ -277,6 +304,75 @@ def gerar_passo1(xlsx_bytes, show_debug=False, visao="Request - Plan", incluir_o
     comp_only_need = pd.concat([comp_only_need, pd.DataFrame([total_comp])], ignore_index=True)
 
     # =================================================
+    # NOVA TABELA — % de Atendimento (por Quarter)
+    # Definição: 
+    # - Request - Plan: PLAN / REQUEST
+    # - F.Response - Request: F.RESPONSE / REQUEST
+    # =================================================
+
+    def _mes_to_quarter(m_alias: str) -> str:
+        mm = _normalize_header(m_alias).split('/')[0]
+        if mm in ['jan', 'fev', 'mar']:
+            return 'Q1'
+        if mm in ['abr', 'mai', 'jun']:
+            return 'Q2'
+        if mm in ['jul', 'ago', 'set']:
+            return 'Q3'
+        return 'Q4'
+
+    quarter_months = {'Q1': [], 'Q2': [], 'Q3': [], 'Q4': []}
+    for m in meses:
+        q = _mes_to_quarter(str(m))
+        quarter_months[q].append(m)
+
+    # demanda sempre é REQUEST
+    demand_df = req
+    # oferta depende da visão
+    supply_df = fr if visao == 'F.Response - Request' else plan
+
+    grp_att = ["SITE", "PRODUCT NEED", "PRODUCT SERIES"]
+
+    dem_g = demand_df[grp_att + meses].groupby(grp_att, dropna=False)[meses].sum().reset_index()
+    sup_g = supply_df[grp_att + meses].groupby(grp_att, dropna=False)[meses].sum().reset_index()
+
+    how_att = 'outer' if incluir_outer else 'inner'
+    att = pd.merge(dem_g, sup_g, on=grp_att, how=how_att, suffixes=("_DEM", "_SUP")).fillna(0)
+
+    for q, mlist in quarter_months.items():
+        if not mlist:
+            att[q] = 100.0
+            continue
+        dem_q = sum(att[f"{m}_DEM"] for m in mlist)
+        sup_q = sum(att[f"{m}_SUP"] for m in mlist)
+        att[q] = (sup_q / dem_q * 100).where(dem_q > 0, 100.0)
+
+    dem_tot = sum(att[f"{m}_DEM"] for m in meses)
+    sup_tot = sum(att[f"{m}_SUP"] for m in meses)
+    att["TOTAL"] = (sup_tot / dem_tot * 100).where(dem_tot > 0, 100.0)
+
+    for c in ['Q1', 'Q2', 'Q3', 'Q4', 'TOTAL']:
+        att[c] = att[c].clip(lower=0, upper=100)
+
+    df_atendimento = att[grp_att + ['Q1', 'Q2', 'Q3', 'Q4', 'TOTAL']].copy()
+
+    total_att = {c: 'TOTAL GERAL' for c in grp_att}
+    for q, mlist in quarter_months.items():
+        if not mlist:
+            total_att[q] = 100.0
+            continue
+        dem_q = sum(att[f"{m}_DEM"] for m in mlist).sum()
+        sup_q = sum(att[f"{m}_SUP"] for m in mlist).sum()
+        total_att[q] = (sup_q / dem_q * 100) if dem_q > 0 else 100.0
+        total_att[q] = max(0.0, min(100.0, total_att[q]))
+
+    dem_t = dem_tot.sum()
+    sup_t = sup_tot.sum()
+    total_att['TOTAL'] = (sup_t / dem_t * 100) if dem_t > 0 else 100.0
+    total_att['TOTAL'] = max(0.0, min(100.0, total_att['TOTAL']))
+
+    df_atendimento = pd.concat([df_atendimento, pd.DataFrame([total_att])], ignore_index=True)
+
+    # =================================================
     # ADIÇÃO — PRODUCT · FC · DELTA MENSAL (COMP - BASE)
     # Mantém exatamente o padrão de colunas das abas originais
     # =================================================
@@ -290,7 +386,6 @@ def gerar_passo1(xlsx_bytes, show_debug=False, visao="Request - Plan", incluir_o
     else:
         comp_fc = comp_df.iloc[0:0]
 
-    # Referência do layout: posição do 1º mês na aba PLAN (como no original)
     month_positions = [plan.columns.get_loc(c) for c in meses if c in plan.columns]
     if month_positions:
         first_month_pos = min(month_positions)
@@ -336,6 +431,7 @@ def gerar_passo1(xlsx_bytes, show_debug=False, visao="Request - Plan", incluir_o
             "Step1_Comparativo_Serie": step1_serie,
             "Step1_Comparativo_Need": step1_need,
             f"Resumo_{comp_name}_Product_Need": comp_only_need,
+            "Atendimento_%_Quarter": df_atendimento,
             f"{comp_name} x {base_name} FC - Produto Mensal": step1_product_fc,
         }
 
@@ -344,6 +440,22 @@ def gerar_passo1(xlsx_bytes, show_debug=False, visao="Request - Plan", incluir_o
             df.to_excel(writer, sheet_name=sheet_name, index=False)
             ws = writer.book[sheet_name]
 
+            # Formatação especial para atendimento (%): gravar como porcentagem no Excel
+            if sheet_name == "Atendimento_%_Quarter":
+                perc_cols = ['Q1', 'Q2', 'Q3', 'Q4', 'TOTAL']
+                for pc in perc_cols:
+                    if pc in df.columns:
+                        col_idx = df.columns.get_loc(pc) + 1
+                        for row in ws.iter_rows(min_row=2, max_row=ws.max_row):
+                            cell = row[col_idx - 1]
+                            if isinstance(cell.value, (int, float)):
+                                cell.value = cell.value / 100.0
+                                cell.number_format = '0%'
+                                if cell.value < 1:
+                                    cell.font = Font(color="FF0000", bold=True)
+                                else:
+                                    cell.font = Font(color="008000", bold=True)
+
             cols_num = df.select_dtypes(include="number").columns
             idx_cols = [df.columns.get_loc(c) + 1 for c in cols_num]
 
@@ -351,11 +463,12 @@ def gerar_passo1(xlsx_bytes, show_debug=False, visao="Request - Plan", incluir_o
                 for idx in idx_cols:
                     cell = row[idx - 1]
                     if isinstance(cell.value, (int, float)):
-                        cell.number_format = '#,##0'
-                        if cell.value < 0:
-                            cell.font = Font(color="FF0000", bold=True)
-                        elif cell.value > 0:
-                            cell.font = Font(color="008000", bold=True)
+                        if sheet_name != "Atendimento_%_Quarter":
+                            cell.number_format = '#,##0'
+                            if cell.value < 0:
+                                cell.font = Font(color="FF0000", bold=True)
+                            elif cell.value > 0:
+                                cell.font = Font(color="008000", bold=True)
 
                 if str(row[0].value).upper() == "TOTAL GERAL":
                     for cell in row:
@@ -369,7 +482,7 @@ def gerar_passo1(xlsx_bytes, show_debug=False, visao="Request - Plan", incluir_o
                     max_len = max(max_len, len(str(cell.value)))
                 ws.column_dimensions[get_column_letter(col[0].column)].width = max_len + 2
 
-    return buf_out.getvalue(), step1_serie, step1_need, comp_only_need
+    return buf_out.getvalue(), step1_serie, step1_need, comp_only_need, df_atendimento
 
 
 # =====================================================
@@ -391,7 +504,7 @@ with col3:
 
 if uploaded:
     try:
-        excel_out, df_serie, df_need, df_comp_need = gerar_passo1(
+        excel_out, df_serie, df_need, df_comp_need, df_atend = gerar_passo1(
             uploaded.read(),
             show_debug=debug,
             visao=visao,
@@ -407,6 +520,9 @@ if uploaded:
         st.subheader("Resumo por PRODUCT NEED (Somente COMP)")
         st.dataframe(formatar_tabela(df_comp_need), use_container_width=True)
 
+        st.subheader("% de Atendimento (por Quarter)")
+        st.dataframe(formatar_tabela_percent(df_atend), use_container_width=True)
+
         nome_saida = f"saida_step1_{visao.replace(' ', '_').replace('.', '')}_{'outer' if incluir_outer else 'inner'}.xlsx"
         st.download_button(
             "⬇️ Baixar Excel",
@@ -419,3 +535,4 @@ if uploaded:
         st.exception(e)
 else:
     st.info("Faça upload do Excel para iniciar.")
+
