@@ -15,9 +15,9 @@ st.set_page_config(
 )
 
 st.title("Comparativo Request Vs Plan")
-st.caption("Comparativo entre cenários com filtros, resumos e exportação")
+st.caption("Comparativo entre cenários com filtros e resumos")
 
-PT_BR_MESES = ["jan", "fev", "mar", "abr", "mai", "jun", "jul", "ago", "set", "out", "nov", "dez"]
+PT_BR_MESES = ["jan","fev","mar","abr","mai","jun","jul","ago","set","out","nov","dez"]
 
 MES_RE = re.compile(
     r'^(jan|fev|mar|abr|mai|jun|jul|ago|set|out|nov|dez)/\d{2}$',
@@ -28,6 +28,7 @@ MES_RE = re.compile(
 # FUNÇÕES UTILITÁRIAS
 # =====================================================
 def _normalize_header(col):
+    # Caso venha como data
     if isinstance(col, (pd.Timestamp, dt.date)):
         return f"{PT_BR_MESES[col.month-1]}/{col.year % 100:02d}"
 
@@ -82,13 +83,20 @@ def formatar_tabela(df):
     df = df.fillna(0)
     cols_num = df.select_dtypes(include="number").columns
 
+    styler = df.style.format(lambda x: f"{x:,.0f}".replace(",", "."), subset=cols_num)
+
+    # Compatibilidade: pandas novos usam .map; antigos, .applymap
+    if hasattr(styler, "map"):
+        styler = styler.map(colorir_valores, subset=cols_num)
+    else:
+        styler = styler.applymap(colorir_valores, subset=cols_num)
+
     styler = (
-        df.style
-        .format(lambda x: f"{x:,.0f}".replace(",", "."), subset=cols_num)
-        .map(colorir_valores, subset=cols_num)
+        styler
         .set_properties(subset=cols_num, **{"text-align": "center"})
         .set_properties(subset=df.columns.difference(cols_num), **{"text-align": "left"})
     )
+
     return styler
 
 
@@ -99,9 +107,8 @@ def gerar_passo1(xlsx_bytes, show_debug=False, visao="Request - Plan", incluir_o
 
     xls_original = pd.ExcelFile(io.BytesIO(xlsx_bytes), engine="openpyxl")
 
-    # Leitura das abas
     plan = pd.read_excel(xls_original, "PLAN", engine="openpyxl")
-    req = pd.read_excel(xls_original, "REQUEST", engine="openpyxl")
+    req  = pd.read_excel(xls_original, "REQUEST", engine="openpyxl")
 
     fr = None
     if "F.RESPONSE" in xls_original.sheet_names:
@@ -110,9 +117,9 @@ def gerar_passo1(xlsx_bytes, show_debug=False, visao="Request - Plan", incluir_o
     if visao == "F.Response - Request" and fr is None:
         raise ValueError("Aba 'F.RESPONSE' não encontrada no Excel enviado.")
 
-    # Detecta meses considerando as abas disponíveis
+    # Detecta meses (união das abas disponíveis)
     meses_plan, map_plan = detectar_colunas_mes(plan)
-    meses_req, map_req = detectar_colunas_mes(req)
+    meses_req,  map_req  = detectar_colunas_mes(req)
     meses = list(dict.fromkeys(meses_plan + meses_req))
 
     map_fr = {}
@@ -125,11 +132,10 @@ def gerar_passo1(xlsx_bytes, show_debug=False, visao="Request - Plan", incluir_o
 
     # Força numérico
     plan = garantir_numerico(plan, meses)
-    req = garantir_numerico(req, meses)
+    req  = garantir_numerico(req, meses)
     if fr is not None:
         fr = garantir_numerico(fr, meses)
 
-    # Debug de cabeçalhos
     if show_debug:
         st.subheader("Diagnóstico PLAN")
         st.json(map_plan)
@@ -140,7 +146,7 @@ def gerar_passo1(xlsx_bytes, show_debug=False, visao="Request - Plan", incluir_o
             st.json(map_fr)
 
     # =================================================
-    # FILTROS
+    # FILTROS (mesmo layout do original, mas com opções vindas da união)
     # =================================================
     st.subheader("Filtros")
 
@@ -150,7 +156,6 @@ def gerar_passo1(xlsx_bytes, show_debug=False, visao="Request - Plan", incluir_o
         vals = sorted(df[col].dropna().unique())
         return st.multiselect(col, vals, default=vals)
 
-    # Base para lista de filtros: união de abas para não "sumir" opções
     frames = [plan, req]
     if fr is not None:
         frames.append(fr)
@@ -158,13 +163,13 @@ def gerar_passo1(xlsx_bytes, show_debug=False, visao="Request - Plan", incluir_o
 
     c1, c2, c3, c4 = st.columns(4)
     with c1:
-        f_brand = filtro_mult(union_df, "PRODUCT BRAND")
+        f_brand  = filtro_mult(union_df, "PRODUCT BRAND")
     with c2:
         f_market = filtro_mult(union_df, "PRODUCT MARKET")
     with c3:
-        f_site = filtro_mult(union_df, "SITE")
+        f_site   = filtro_mult(union_df, "SITE")
     with c4:
-        f_need = filtro_mult(union_df, "PRODUCT NEED")
+        f_need   = filtro_mult(union_df, "PRODUCT NEED")
 
     def aplicar_filtros(df):
         if df is None:
@@ -180,11 +185,11 @@ def gerar_passo1(xlsx_bytes, show_debug=False, visao="Request - Plan", incluir_o
         return df
 
     plan = aplicar_filtros(plan)
-    req = aplicar_filtros(req)
-    fr = aplicar_filtros(fr)
+    req  = aplicar_filtros(req)
+    fr   = aplicar_filtros(fr)
 
     # =================================================
-    # Seleção base/comp conforme visão
+    # Seleção BASE e COMP conforme visão
     # =================================================
     if visao == "F.Response - Request":
         base_name, comp_name = "REQUEST", "F.RESPONSE"
@@ -196,54 +201,7 @@ def gerar_passo1(xlsx_bytes, show_debug=False, visao="Request - Plan", incluir_o
     how_merge = "outer" if incluir_outer else "inner"
 
     # =================================================
-    # TABELA 1 — PRODUCT NEED (COMP - BASE)
-    # =================================================
-    grp_need = ["SITE", "PRODUCT NEED"]
-
-    base_n = base_df[grp_need + meses].groupby(grp_need, dropna=False)[meses].sum().reset_index()
-    comp_n = comp_df[grp_need + meses].groupby(grp_need, dropna=False)[meses].sum().reset_index()
-
-    comp_need_merge = pd.merge(
-        base_n, comp_n,
-        on=grp_need,
-        how=how_merge,
-        suffixes=(f"_{base_name}", f"_{comp_name}")
-    ).fillna(0)
-
-    for m in meses:
-        comp_need_merge[m] = comp_need_merge[f"{m}_{comp_name}"] - comp_need_merge[f"{m}_{base_name}"]
-
-    step1_need = comp_need_merge[grp_need + meses].copy()
-    step1_need["TOTAL"] = step1_need[meses].sum(axis=1)
-
-    total_n = {c: "TOTAL GERAL" for c in grp_need}
-    for m in meses:
-        total_n[m] = step1_need[m].sum()
-    total_n["TOTAL"] = step1_need["TOTAL"].sum()
-
-    step1_need = pd.concat([step1_need, pd.DataFrame([total_n])], ignore_index=True)
-
-    # =================================================
-    # TABELA EXTRA — PRODUCT NEED (SOMENTE COMP)
-    # (no original era somente REQUEST; agora generalizado)
-    # =================================================
-    comp_only_need = (
-        comp_df[grp_need + meses]
-        .groupby(grp_need, dropna=False)[meses]
-        .sum()
-        .reset_index()
-    )
-    comp_only_need["TOTAL"] = comp_only_need[meses].sum(axis=1)
-
-    total_comp = {c: "TOTAL GERAL" for c in grp_need}
-    for m in meses:
-        total_comp[m] = comp_only_need[m].sum()
-    total_comp["TOTAL"] = comp_only_need["TOTAL"].sum()
-
-    comp_only_need = pd.concat([comp_only_need, pd.DataFrame([total_comp])], ignore_index=True)
-
-    # =================================================
-    # TABELA 2 — ORDEM SOLICITADA (COMP - BASE)
+    # TABELA DETALHADA — PRODUCT NEED + PRODUCT SERIES + BRAND + MARKET
     # =================================================
     grp_serie = [
         "SITE",
@@ -269,18 +227,59 @@ def gerar_passo1(xlsx_bytes, show_debug=False, visao="Request - Plan", incluir_o
     step1_serie = comp_s_merge[grp_serie + meses].copy()
     step1_serie["TOTAL"] = step1_serie[meses].sum(axis=1)
 
+    # Linha TOTAL GERAL (detalhado)
     total_s = {c: "TOTAL GERAL" for c in grp_serie}
     for m in meses:
         total_s[m] = step1_serie[m].sum()
     total_s["TOTAL"] = step1_serie["TOTAL"].sum()
-
     step1_serie = pd.concat([step1_serie, pd.DataFrame([total_s])], ignore_index=True)
 
     # =================================================
-    # ADIÇÃO — PRODUCT · FC · DELTA MENSAL (COMP - BASE)
-    # Mantém colunas meta (até o 1º mês) como no original
+    # RESUMO POR PRODUCT NEED (COMP - BASE)
+    #
+    # CORREÇÃO: Calculado a partir do detalhado, garantindo que o TOTAL por SITE
+    # feche com a soma das linhas do detalhado (evita divergências como no print).
     # =================================================
-    # Filtra FC no base e no comp (se a coluna existir)
+    grp_need = ["SITE", "PRODUCT NEED"]
+
+    step1_serie_sem_total = step1_serie[step1_serie["SITE"].astype(str).str.upper() != "TOTAL GERAL"].copy()
+    step1_need = (
+        step1_serie_sem_total[grp_need + meses]
+        .groupby(grp_need, dropna=False)[meses]
+        .sum()
+        .reset_index()
+    )
+    step1_need["TOTAL"] = step1_need[meses].sum(axis=1)
+
+    total_n = {c: "TOTAL GERAL" for c in grp_need}
+    for m in meses:
+        total_n[m] = step1_need[m].sum()
+    total_n["TOTAL"] = step1_need["TOTAL"].sum()
+
+    step1_need = pd.concat([step1_need, pd.DataFrame([total_n])], ignore_index=True)
+
+    # =================================================
+    # RESUMO POR PRODUCT NEED (SOMENTE COMP)
+    # =================================================
+    comp_only_need = (
+        comp_df[grp_need + meses]
+        .groupby(grp_need, dropna=False)[meses]
+        .sum()
+        .reset_index()
+    )
+    comp_only_need["TOTAL"] = comp_only_need[meses].sum(axis=1)
+
+    total_comp = {c: "TOTAL GERAL" for c in grp_need}
+    for m in meses:
+        total_comp[m] = comp_only_need[m].sum()
+    total_comp["TOTAL"] = comp_only_need["TOTAL"].sum()
+
+    comp_only_need = pd.concat([comp_only_need, pd.DataFrame([total_comp])], ignore_index=True)
+
+    # =================================================
+    # ADIÇÃO — PRODUCT · FC · DELTA MENSAL (COMP - BASE)
+    # Mantém exatamente o padrão de colunas das abas originais
+    # =================================================
     if "DEMAND TYPE" in base_df.columns:
         base_fc = base_df[base_df["DEMAND TYPE"] == "FC"]
     else:
@@ -291,18 +290,16 @@ def gerar_passo1(xlsx_bytes, show_debug=False, visao="Request - Plan", incluir_o
     else:
         comp_fc = comp_df.iloc[0:0]
 
-    # Descobrir a posição do 1º mês em PLAN (mantém referência original) — fallback para base_df
+    # Referência do layout: posição do 1º mês na aba PLAN (como no original)
     month_positions = [plan.columns.get_loc(c) for c in meses if c in plan.columns]
     if month_positions:
         first_month_pos = min(month_positions)
         meta_cols = list(plan.columns[:first_month_pos])
     else:
-        # fallback: usa base_df
         month_positions_b = [base_df.columns.get_loc(c) for c in meses if c in base_df.columns]
         first_month_pos = min(month_positions_b) if month_positions_b else len(base_df.columns)
         meta_cols = list(base_df.columns[:first_month_pos])
 
-    # Agregar por TODAS as colunas de metadados
     base_p = base_fc[meta_cols + meses].groupby(meta_cols, dropna=False)[meses].sum().reset_index()
     comp_p = comp_fc[meta_cols + meses].groupby(meta_cols, dropna=False)[meses].sum().reset_index()
 
@@ -332,7 +329,6 @@ def gerar_passo1(xlsx_bytes, show_debug=False, visao="Request - Plan", incluir_o
 
     buf_out = io.BytesIO()
     with pd.ExcelWriter(buf_out, engine="openpyxl") as writer:
-        # Copia as abas originais
         for sheet in xls_original.sheet_names:
             pd.read_excel(xls_original, sheet).to_excel(writer, sheet_name=sheet, index=False)
 
@@ -344,8 +340,9 @@ def gerar_passo1(xlsx_bytes, show_debug=False, visao="Request - Plan", incluir_o
         }
 
         for nome, df in abas.items():
-            df.to_excel(writer, sheet_name=nome[:31], index=False)
-            ws = writer.book[nome[:31]]
+            sheet_name = nome[:31]
+            df.to_excel(writer, sheet_name=sheet_name, index=False)
+            ws = writer.book[sheet_name]
 
             cols_num = df.select_dtypes(include="number").columns
             idx_cols = [df.columns.get_loc(c) + 1 for c in cols_num]
