@@ -143,13 +143,12 @@ if uploaded:
 
         st.subheader(f"📈 Visão: {titulo_calc}")
 
-        st.dataframe(
-            df_out.style.applymap(
-                colorir,
-                subset=meses + ["TOTAL"]
-            ),
-            use_container_width=True
-        )
+       
+st.dataframe(
+    df_out,
+    use_container_width=True
+)
+
 
         # Download
         buffer = io.BytesIO()
