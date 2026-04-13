@@ -535,4 +535,3 @@ if uploaded:
         st.exception(e)
 else:
     st.info("Faça upload do Excel para iniciar.")
-
