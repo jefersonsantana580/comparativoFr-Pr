@@ -50,6 +50,7 @@ def colorir(val):
 # =====================================================
 # FUNÇÃO PRINCIPAL DE PROCESSAMENTO
 # =====================================================
+
 def processar_comparativo(bytes_xlsx, visao):
     xls = pd.ExcelFile(bytes_xlsx)
 
@@ -72,11 +73,36 @@ def processar_comparativo(bytes_xlsx, visao):
     df_base = garantir_numerico(df_base, meses)
     df_comp = garantir_numerico(df_comp, meses)
 
-    # Garantir mesma ordem
-    df_base = df_base.set_index(
-        [c for c in df_base.columns if c not in meses]
+    # Colunas dimensionais = tudo que NÃO é mês
+    dim_cols = [c for c in df_base.columns if c not in meses]
+
+    # Merge correto (alinhamento real)
+    df = df_base.merge(
+        df_comp,
+        on=dim_cols,
+        how="outer",
+        suffixes=("_base", "_comp")
     )
-    df_comp = df_comp.set_index(df_base.index.names)
+
+    # Garantir NaN = 0
+    for m in meses:
+        df[f"{m}_base"] = df[f"{m}_base"].fillna(0)
+        df[f"{m}_comp"] = df[f"{m}_comp"].fillna(0)
+
+    # Cálculo
+    for m in meses:
+        df[m] = df[f"{m}_comp"] - df[f"{m}_base"]
+
+    # Limpeza
+    drop_cols = []
+    for m in meses:
+        drop_cols += [f"{m}_base", f"{m}_comp"]
+
+    df_final = df.drop(columns=drop_cols)
+    df_final["TOTAL"] = df_final[meses].sum(axis=1)
+
+    return df_final, meses, titulo_calc
+
 
     # ==============================
     # CÁLCULO (AQUI É O CORAÇÃO)
