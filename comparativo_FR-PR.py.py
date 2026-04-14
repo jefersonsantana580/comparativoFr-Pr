@@ -503,8 +503,7 @@ if uploaded:
             uploaded.read(),
             show_debug=debug,
             visao=visao,
-            incluir_outer=incluir_outer,
-        )
+                )
 
         st.subheader("Comparativo por PRODUCT NEED + PRODUCT SERIES")
         st.dataframe(formatar_tabela(df_serie), use_container_width=True)
