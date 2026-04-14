@@ -129,6 +129,21 @@ def formatar_tabela_percent(df):
     return styler
 
 
+def normalizar_chaves(df, cols):
+    if df is None:
+        return None
+
+    for c in cols:
+        if c in df.columns:
+            df[c] = (
+                df[c]
+                .fillna("")
+                .astype(str)
+                .str.strip()
+                .str.upper()
+            )
+    return df
+
 # =====================================================
 # FUNÇÃO PRINCIPAL
 # =====================================================
@@ -324,6 +339,14 @@ def gerar_passo1(xlsx_bytes, show_debug=False, visao="Request - Plan", incluir_o
     req  = aplicar_filtros(req)
     fr   = aplicar_filtros(fr)
 
+    
+key_cols = ["SITE", "PRODUCT NEED", "PRODUCT SERIES", "PRODUCT BRAND", "PRODUCT MARKET"]
+
+    plan = normalizar_chaves(plan, key_cols)
+    req  = normalizar_chaves(req, key_cols)
+    fr   = normalizar_chaves(fr, key_cols)
+
+
     # =================================================
     # Seleção BASE e COMP conforme visão
     # =================================================
@@ -350,15 +373,47 @@ def gerar_passo1(xlsx_bytes, show_debug=False, visao="Request - Plan", incluir_o
     base_s = base_df[grp_serie + meses].groupby(grp_serie, dropna=False)[meses].sum().reset_index()
     comp_s = comp_df[grp_serie + meses].groupby(grp_serie, dropna=False)[meses].sum().reset_index()
 
-    comp_s_merge = pd.merge(
+    
+comp_s_merge = pd.merge(
         base_s, comp_s,
         on=grp_serie,
         how=how_merge,
-        suffixes=(f"_{base_name}", f"_{comp_name}")
-    ).fillna(0)
+        suffixes=(f"_{base_name}", f"_{comp_name}"),
+        indicator=True
+    )
+
+    # preencher zero SOMENTE nas colunas numéricas de meses
+    for m in meses:
+        col_base = f"{m}_{base_name}"
+        col_comp = f"{m}_{comp_name}"
+
+        if col_base in comp_s_merge.columns:
+            comp_s_merge[col_base] = comp_s_merge[col_base].fillna(0)
+
+        if col_comp in comp_s_merge.columns:
+            comp_s_merge[col_comp] = comp_s_merge[col_comp].fillna(0)
+
 
     for m in meses:
         comp_s_merge[m] = comp_s_merge[f"{m}_{comp_name}"] - comp_s_merge[f"{m}_{base_name}"]
+
+
+    if show_debug:
+        st.subheader("Diagnóstico do Merge - Comparativo Geral")
+        st.write(comp_s_merge["_merge"].value_counts())
+
+        st.write("Linhas só no BASE")
+        st.dataframe(
+            comp_s_merge[comp_s_merge["_merge"] == "left_only"][grp_serie + [f"{m}_{base_name}" for m in meses]],
+            use_container_width=True
+        )
+
+        st.write("Linhas só no COMP")
+        st.dataframe(
+            comp_s_merge[comp_s_merge["_merge"] == "right_only"][grp_serie + [f"{m}_{comp_name}" for m in meses]],
+            use_container_width=True
+        )
+
 
     step1_serie = comp_s_merge[grp_serie + meses].copy()
     step1_serie["TOTAL"] = step1_serie[meses].sum(axis=1)
@@ -505,12 +560,24 @@ def gerar_passo1(xlsx_bytes, show_debug=False, visao="Request - Plan", incluir_o
     base_p = base_fc[meta_cols + meses].groupby(meta_cols, dropna=False)[meses].sum().reset_index()
     comp_p = comp_fc[meta_cols + meses].groupby(meta_cols, dropna=False)[meses].sum().reset_index()
 
-    comp_p_merge = pd.merge(
+    
+comp_p_merge = pd.merge(
         base_p, comp_p,
         on=meta_cols,
         how=how_merge,
         suffixes=(f"_{base_name}", f"_{comp_name}")
-    ).fillna(0)
+    )
+
+    for m in meses:
+        col_base = f"{m}_{base_name}"
+        col_comp = f"{m}_{comp_name}"
+
+        if col_base in comp_p_merge.columns:
+            comp_p_merge[col_base] = comp_p_merge[col_base].fillna(0)
+
+        if col_comp in comp_p_merge.columns:
+            comp_p_merge[col_comp] = comp_p_merge[col_comp].fillna(0)
+
 
     step1_product_fc = comp_p_merge[meta_cols].copy()
     for m in meses:
