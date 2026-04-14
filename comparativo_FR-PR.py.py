@@ -266,7 +266,7 @@ def gerar_passo1(xlsx_bytes, show_debug=False, visao="Request - Plan", incluir_o
     # RESUMO POR PRODUCT NEED (COMP - BASE)
     # CORREÇÃO: calculado a partir do detalhado para sempre fechar.
     # =================================================
-    grp_need = ["SITE", "PRODUCT NEED"]
+    grp_need = ["SITE", "PRODUCT NEED", "PRODUCT BRAND"]
     step1_serie_sem_total = step1_serie[step1_serie["SITE"].astype(str).str.upper() != "TOTAL GERAL"].copy()
 
     step1_need = (
