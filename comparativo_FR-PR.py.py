@@ -338,16 +338,13 @@ def gerar_passo1(xlsx_bytes, show_debug=False, visao="Request - Plan", incluir_o
     plan = aplicar_filtros(plan)
     req  = aplicar_filtros(req)
     fr   = aplicar_filtros(fr)
-
     
 key_cols = ["SITE", "PRODUCT NEED", "PRODUCT SERIES", "PRODUCT BRAND", "PRODUCT MARKET"]
-
     plan = normalizar_chaves(plan, key_cols)
     req  = normalizar_chaves(req, key_cols)
     fr   = normalizar_chaves(fr, key_cols)
 
-
-    # =================================================
+# =================================================
     # Seleção BASE e COMP conforme visão
     # =================================================
     if visao == "F.Response - Request":
