@@ -336,13 +336,13 @@ def gerar_passo1(xlsx_bytes, show_debug=False, visao="Request - Plan", incluir_o
         return df
 
     plan = aplicar_filtros(plan)
-    req  = aplicar_filtros(req)
-    fr   = aplicar_filtros(fr)
+    req = aplicar_filtros(req)
+    fr = aplicar_filtros(fr)
     
 key_cols = ["SITE", "PRODUCT NEED", "PRODUCT SERIES", "PRODUCT BRAND", "PRODUCT MARKET"]
-    plan = normalizar_chaves(plan, key_cols)
-    req  = normalizar_chaves(req, key_cols)
-    fr   = normalizar_chaves(fr, key_cols)
+plan = normalizar_chaves(plan, key_cols)
+req  = normalizar_chaves(req, key_cols)
+fr   = normalizar_chaves(fr, key_cols)
 
 # =================================================
     # Seleção BASE e COMP conforme visão
