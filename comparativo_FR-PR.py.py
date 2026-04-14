@@ -508,7 +508,7 @@ if uploaded:
         st.subheader("Comparativo Geral")
         st.dataframe(formatar_tabela(df_serie), use_container_width=True)
 
-        st.subheader("Resumo por SITE + PRODUCT NEED")
+        st.subheader("Comparativo por SITE + PRODUCT NEED")
         st.dataframe(formatar_tabela(df_need), use_container_width=True)
 
         st.subheader("Resumo por PRODUCT NEED")
