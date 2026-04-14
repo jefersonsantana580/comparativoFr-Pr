@@ -511,7 +511,7 @@ if uploaded:
         st.subheader("Comparativo por SITE + PRODUCT NEED")
         st.dataframe(formatar_tabela(df_need), use_container_width=True)
 
-        st.subheader("Resumo por PRODUCT NEED")
+        st.subheader("Resumo final por PRODUCT NEED")
         st.dataframe(formatar_tabela(df_comp_need), use_container_width=True)
 
         st.subheader("% de Atendimento (por Quarter)")
