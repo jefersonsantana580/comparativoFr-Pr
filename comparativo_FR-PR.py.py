@@ -359,7 +359,7 @@ how_merge = "outer"
     # =================================================
     # TABELA DETALHADA — PRODUCT NEED + PRODUCT SERIES + BRAND + MARKET
     # =================================================
-    grp_serie = [
+grp_serie = [
         "SITE",
         "PRODUCT NEED",
         "PRODUCT SERIES",
