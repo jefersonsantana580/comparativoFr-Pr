@@ -517,7 +517,7 @@ if uploaded:
         st.subheader("% de Atendimento (por Quarter)")
         st.dataframe(formatar_tabela_percent(df_atend), use_container_width=True)
 
-        nome_saida = f"saida_step1_{visao.replace(' ', '_').replace('.', '')}_{'outer' if incluir_outer else 'inner'}.xlsx"
+        nome_saida = f"saida_step1_{visao.replace(' ', '_').replace('.', '')}_.xlsx"
         st.download_button(
             "⬇️ Baixar Excel",
             data=excel_out,
