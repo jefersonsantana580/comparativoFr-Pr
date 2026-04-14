@@ -505,7 +505,7 @@ if uploaded:
             visao=visao,
                 )
 
-        st.subheader("Comparativo por PRODUCT NEED + PRODUCT SERIES")
+        st.subheader("Comparativo Geral")
         st.dataframe(formatar_tabela(df_serie), use_container_width=True)
 
         st.subheader("Resumo por SITE + PRODUCT NEED")
