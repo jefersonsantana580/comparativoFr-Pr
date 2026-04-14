@@ -174,48 +174,46 @@ def gerar_passo1(xlsx_bytes, show_debug=False, visao="Request - Plan", incluir_o
             st.subheader("Diagnóstico F.RESPONSE")
             st.json(map_fr)
 
-    # =================================================
-    # FILTROS (mesmo layout do original, mas com opções vindas da união)
-    # =================================================
-    st.subheader("Filtros")
+   
+# =================================================
+# FILTROS (mesmo layout do original, mas com opções vindas da união)
+# =================================================
+st.subheader("Filtros")
 
-    def filtro_mult(df, col):
-        if df is None or col not in df.columns:
-            return None
-        vals = sorted(df[col].dropna().unique())
-        return st.multiselect(col, vals, default=vals)
+def filtro_mult(df, col):
+    if df is None or col not in df.columns:
+        return None
+    vals = sorted(df[col].dropna().unique())
+    return st.multiselect(col, vals, default=vals)
 
-    frames = [plan, req]
-    if fr is not None:
-        frames.append(fr)
-    union_df = pd.concat(frames, ignore_index=True, sort=False)
+frames = [plan, req]
+if fr is not None:
+    frames.append(fr)
+union_df = pd.concat(frames, ignore_index=True, sort=False)
 
-    c1, c2, c3, c4 = st.columns(4)
-    with c1:
-        f_brand  = filtro_mult(union_df, "PRODUCT BRAND")
-    with c2:
-        f_market = filtro_mult(union_df, "PRODUCT MARKET")
-    with c3:
-        f_site   = filtro_mult(union_df, "SITE")
-    with c4:
-        f_need   = filtro_mult(union_df, "PRODUCT NEED")
+c1, c2, c3, c4 = st.columns(4)
+with c1:
+    f_brand  = filtro_mult(union_df, "PRODUCT BRAND")
+with c2:
+    f_market = filtro_mult(union_df, "PRODUCT MARKET")
+with c3:
+    f_site   = filtro_mult(union_df, "SITE")
+with c4:
+    f_need   = filtro_mult(union_df, "PRODUCT NEED")
 
-    def aplicar_filtros(df):
-        if df is None:
-            return None
-        if f_brand is not None and "PRODUCT BRAND" in df.columns:
-            df = df[df["PRODUCT BRAND"].isin(f_brand)]
-        if f_market is not None and "PRODUCT MARKET" in df.columns:
-            df = df[df["PRODUCT MARKET"].isin(f_market)]
-        if f_site is not None and "SITE" in df.columns:
-            df = df[df["SITE"].isin(f_site)]
-        if f_need is not None and "PRODUCT NEED" in df.columns:
-            df = df[df["PRODUCT NEED"].isin(f_need)]
-        return df
+def aplicar_filtros(df):
+    if df is None:
+        return None
+    if f_brand is not None and "PRODUCT BRAND" in df.columns:
+        df = df[df["PRODUCT BRAND"].isin(f_brand)]
+    if f_market is not None and "PRODUCT MARKET" in df.columns:
+        df = df[df["PRODUCT MARKET"].isin(f_market)]
+    if f_site is not None and "SITE" in df.columns:
+        df = df[df["SITE"].isin(f_site)]
+    if f_need is not None and "PRODUCT NEED" in df.columns:
+        df = df[df["PRODUCT NEED"].isin(f_need)]
+    return df
 
-    plan = aplicar_filtros(plan)
-    req  = aplicar_filtros(req)
-    fr   = aplicar_filtros(fr)
 
     # =================================================
     # Seleção BASE e COMP conforme visão
