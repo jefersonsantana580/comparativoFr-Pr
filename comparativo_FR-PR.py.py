@@ -569,10 +569,10 @@ comp_p_merge = pd.merge(
         col_base = f"{m}_{base_name}"
         col_comp = f"{m}_{comp_name}"
 
-        if col_base in comp_p_merge.columns:
+    if col_base in comp_p_merge.columns:
             comp_p_merge[col_base] = comp_p_merge[col_base].fillna(0)
 
-        if col_comp in comp_p_merge.columns:
+    if col_comp in comp_p_merge.columns:
             comp_p_merge[col_comp] = comp_p_merge[col_comp].fillna(0)
 
 
