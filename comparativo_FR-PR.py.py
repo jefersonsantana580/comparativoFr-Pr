@@ -175,43 +175,150 @@ def gerar_passo1(xlsx_bytes, show_debug=False, visao="Request - Plan", incluir_o
             st.json(map_fr)
 
    
+
 # =================================================
-# FILTROS (mesmo layout do original, mas com opções vindas da união)
+# FILTROS — OPÇÃO C (DEPENDENTES / DINÂMICOS)
 # =================================================
 st.subheader("Filtros")
-
-def filtro_mult(df, col):
-    if df is None or col not in df.columns:
-        return None
-    vals = sorted(df[col].dropna().unique())
-    return st.multiselect(col, vals, default=vals)
 
 frames = [plan, req]
 if fr is not None:
     frames.append(fr)
-union_df = pd.concat(frames, ignore_index=True, sort=False)
+union_df = pd.concat(frames, ignore_index=True, sort=False).copy()
 
-c1, c2, c3, c4 = st.columns(4)
+# garante string nas colunas de filtro
+for col in ["PRODUCT BRAND", "PRODUCT MARKET", "SITE", "PRODUCT NEED"]:
+    if col in union_df.columns:
+        union_df[col] = union_df[col].astype(str)
+
+# inicializa estado
+for k in ["f_brand", "f_market", "f_site", "f_need"]:
+    if k not in st.session_state:
+        st.session_state[k] = []
+
+top1, top2 = st.columns([1.2, 8])
+with top1:
+    if st.button("Limpar filtros", use_container_width=True):
+        for k in ["f_brand", "f_market", "f_site", "f_need"]:
+            st.session_state[k] = []
+        st.rerun()
+
+with top2:
+    st.caption("Os filtros são dependentes: cada seleção reduz as opções disponíveis nos demais.")
+
+def filtrar_base(df, brand=None, market=None, site=None, need=None):
+    out = df.copy()
+
+    if brand:
+        out = out[out["PRODUCT BRAND"].isin(brand)]
+    if market:
+        out = out[out["PRODUCT MARKET"].isin(market)]
+    if site:
+        out = out[out["SITE"].isin(site)]
+    if need:
+        out = out[out["PRODUCT NEED"].isin(need)]
+
+    return out
+
+def opcoes_validas(df, coluna):
+    if coluna not in df.columns:
+        return []
+    return sorted(df[coluna].dropna().astype(str).unique().tolist())
+
+c1, c2, c3, c4 = st.columns([1.1, 1.6, 1.0, 1.5])
+
+# BRAND depende dos demais (exceto do próprio BRAND)
+base_brand = filtrar_base(
+    union_df,
+    market=st.session_state["f_market"],
+    site=st.session_state["f_site"],
+    need=st.session_state["f_need"]
+)
+opts_brand = opcoes_validas(base_brand, "PRODUCT BRAND")
+st.session_state["f_brand"] = [v for v in st.session_state["f_brand"] if v in opts_brand]
 with c1:
-    f_brand  = filtro_mult(union_df, "PRODUCT BRAND")
+    f_brand = st.multiselect(
+        "PRODUCT BRAND",
+        options=opts_brand,
+        default=st.session_state["f_brand"],
+        key="f_brand",
+        placeholder="Todos"
+    )
+    st.caption(f"{len(opts_brand)} opções")
+
+# MARKET depende dos demais (exceto do próprio MARKET)
+base_market = filtrar_base(
+    union_df,
+    brand=st.session_state["f_brand"],
+    site=st.session_state["f_site"],
+    need=st.session_state["f_need"]
+)
+opts_market = opcoes_validas(base_market, "PRODUCT MARKET")
+st.session_state["f_market"] = [v for v in st.session_state["f_market"] if v in opts_market]
 with c2:
-    f_market = filtro_mult(union_df, "PRODUCT MARKET")
+    f_market = st.multiselect(
+        "PRODUCT MARKET",
+        options=opts_market,
+        default=st.session_state["f_market"],
+        key="f_market",
+        placeholder="Todos"
+    )
+    st.caption(f"{len(opts_market)} opções")
+
+# SITE depende dos demais (exceto do próprio SITE)
+base_site = filtrar_base(
+    union_df,
+    brand=st.session_state["f_brand"],
+    market=st.session_state["f_market"],
+    need=st.session_state["f_need"]
+)
+opts_site = opcoes_validas(base_site, "SITE")
+st.session_state["f_site"] = [v for v in st.session_state["f_site"] if v in opts_site]
 with c3:
-    f_site   = filtro_mult(union_df, "SITE")
+    f_site = st.multiselect(
+        "SITE",
+        options=opts_site,
+        default=st.session_state["f_site"],
+        key="f_site",
+        placeholder="Todos"
+    )
+    st.caption(f"{len(opts_site)} opções")
+
+# NEED depende dos demais (exceto do próprio NEED)
+base_need = filtrar_base(
+    union_df,
+    brand=st.session_state["f_brand"],
+    market=st.session_state["f_market"],
+    site=st.session_state["f_site"]
+)
+opts_need = opcoes_validas(base_need, "PRODUCT NEED")
+st.session_state["f_need"] = [v for v in st.session_state["f_need"] if v in opts_need]
 with c4:
-    f_need   = filtro_mult(union_df, "PRODUCT NEED")
+    f_need = st.multiselect(
+        "PRODUCT NEED",
+        options=opts_need,
+        default=st.session_state["f_need"],
+        key="f_need",
+        placeholder="Todos"
+    )
+    st.caption(f"{len(opts_need)} opções")
 
 def aplicar_filtros(df):
     if df is None:
         return None
-    if f_brand is not None and "PRODUCT BRAND" in df.columns:
-        df = df[df["PRODUCT BRAND"].isin(f_brand)]
-    if f_market is not None and "PRODUCT MARKET" in df.columns:
-        df = df[df["PRODUCT MARKET"].isin(f_market)]
-    if f_site is not None and "SITE" in df.columns:
-        df = df[df["SITE"].isin(f_site)]
-    if f_need is not None and "PRODUCT NEED" in df.columns:
-        df = df[df["PRODUCT NEED"].isin(f_need)]
+
+    if st.session_state["f_brand"] and "PRODUCT BRAND" in df.columns:
+        df = df[df["PRODUCT BRAND"].astype(str).isin(st.session_state["f_brand"])]
+
+    if st.session_state["f_market"] and "PRODUCT MARKET" in df.columns:
+        df = df[df["PRODUCT MARKET"].astype(str).isin(st.session_state["f_market"])]
+
+    if st.session_state["f_site"] and "SITE" in df.columns:
+        df = df[df["SITE"].astype(str).isin(st.session_state["f_site"])]
+
+    if st.session_state["f_need"] and "PRODUCT NEED" in df.columns:
+        df = df[df["PRODUCT NEED"].astype(str).isin(st.session_state["f_need"])]
+
     return df
 
 
