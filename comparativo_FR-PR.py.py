@@ -132,7 +132,7 @@ def formatar_tabela_percent(df):
 # =====================================================
 # FUNÇÃO PRINCIPAL
 # =====================================================
-def gerar_passo1(xlsx_bytes, show_debug=False, visao="Request - Plan", incluir_outer=False):
+def gerar_passo1(xlsx_bytes, show_debug=False, visao="Request - Plan", incluir_outer=True):
 
     xls_original = pd.ExcelFile(io.BytesIO(xlsx_bytes), engine="openpyxl")
 
@@ -227,8 +227,7 @@ def gerar_passo1(xlsx_bytes, show_debug=False, visao="Request - Plan", incluir_o
         base_name, comp_name = "PLAN", "REQUEST"
         base_df, comp_df = plan, req
 
-    how_merge = "outer" if incluir_outer else "inner"
-
+    how_merge = "outer"
     # =================================================
     # TABELA DETALHADA — PRODUCT NEED + PRODUCT SERIES + BRAND + MARKET
     # =================================================
