@@ -508,10 +508,10 @@ if uploaded:
         st.subheader("Comparativo por PRODUCT NEED + PRODUCT SERIES")
         st.dataframe(formatar_tabela(df_serie), use_container_width=True)
 
-        st.subheader("Resumo por PRODUCT NEED (COMP - BASE)")
+        st.subheader("Resumo por SITE + PRODUCT NEED")
         st.dataframe(formatar_tabela(df_need), use_container_width=True)
 
-        st.subheader("Resumo por PRODUCT NEED (Somente COMP)")
+        st.subheader("Resumo por PRODUCT NEED")
         st.dataframe(formatar_tabela(df_comp_need), use_container_width=True)
 
         st.subheader("% de Atendimento (por Quarter)")
