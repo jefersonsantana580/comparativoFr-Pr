@@ -493,12 +493,7 @@ uploaded = st.file_uploader("Envie o Excel (PLAN, REQUEST e opcionalmente F.RESP
 col1, col2, col3 = st.columns([2, 2, 3])
 with col1:
     visao = st.radio("Visão", ["Request - Plan", "F.Response - Request"], horizontal=True)
-#with col2:
-    incluir_outer = st.checkbox(
-        "Incluir todos (outer)",
-        value=False,
-        help="Desmarcado: apenas interseção (como no app original). Marcado: inclui combinações que existam só em um lado (ausentes tratados como 0)."
-    )
+
 with col3:
     debug = st.checkbox("Exibir diagnóstico", value=False)
 
