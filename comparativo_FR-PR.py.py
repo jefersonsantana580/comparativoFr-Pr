@@ -144,16 +144,15 @@ def normalizar_chaves(df, cols):
             )
     return df
 
+
 # =====================================================
 # FUNÇÃO PRINCIPAL
 # =====================================================
-
 def gerar_passo1(xlsx_bytes, show_debug=False, visao="Request - Plan", incluir_outer=True):
-
     xls_original = pd.ExcelFile(io.BytesIO(xlsx_bytes), engine="openpyxl")
 
     plan = pd.read_excel(xls_original, "PLAN", engine="openpyxl")
-    req  = pd.read_excel(xls_original, "REQUEST", engine="openpyxl")
+    req = pd.read_excel(xls_original, "REQUEST", engine="openpyxl")
 
     fr = None
     if "F.RESPONSE" in xls_original.sheet_names:
@@ -164,7 +163,7 @@ def gerar_passo1(xlsx_bytes, show_debug=False, visao="Request - Plan", incluir_o
 
     # Detecta meses (união das abas disponíveis)
     meses_plan, map_plan = detectar_colunas_mes(plan)
-    meses_req,  map_req  = detectar_colunas_mes(req)
+    meses_req, map_req = detectar_colunas_mes(req)
     meses = list(dict.fromkeys(meses_plan + meses_req))
 
     map_fr = {}
@@ -177,7 +176,7 @@ def gerar_passo1(xlsx_bytes, show_debug=False, visao="Request - Plan", incluir_o
 
     # Força numérico
     plan = garantir_numerico(plan, meses)
-    req  = garantir_numerico(req, meses)
+    req = garantir_numerico(req, meses)
     if fr is not None:
         fr = garantir_numerico(fr, meses)
 
@@ -338,13 +337,13 @@ def gerar_passo1(xlsx_bytes, show_debug=False, visao="Request - Plan", incluir_o
     plan = aplicar_filtros(plan)
     req = aplicar_filtros(req)
     fr = aplicar_filtros(fr)
-    
+
     key_cols = ["SITE", "PRODUCT NEED", "PRODUCT SERIES", "PRODUCT BRAND", "PRODUCT MARKET"]
     plan = normalizar_chaves(plan, key_cols)
-    req  = normalizar_chaves(req, key_cols)
-    fr   = normalizar_chaves(fr, key_cols)
+    req = normalizar_chaves(req, key_cols)
+    fr = normalizar_chaves(fr, key_cols)
 
-# =================================================
+    # =================================================
     # Seleção BASE e COMP conforme visão
     # =================================================
     if visao == "F.Response - Request":
@@ -353,7 +352,7 @@ def gerar_passo1(xlsx_bytes, show_debug=False, visao="Request - Plan", incluir_o
     else:
         base_name, comp_name = "PLAN", "REQUEST"
         base_df, comp_df = plan, req
-       
+
     how_merge = "outer"
 
     # =================================================
@@ -370,7 +369,6 @@ def gerar_passo1(xlsx_bytes, show_debug=False, visao="Request - Plan", incluir_o
     base_s = base_df[grp_serie + meses].groupby(grp_serie, dropna=False)[meses].sum().reset_index()
     comp_s = comp_df[grp_serie + meses].groupby(grp_serie, dropna=False)[meses].sum().reset_index()
 
-    
     comp_s_merge = pd.merge(
         base_s, comp_s,
         on=grp_serie,
@@ -390,10 +388,8 @@ def gerar_passo1(xlsx_bytes, show_debug=False, visao="Request - Plan", incluir_o
         if col_comp in comp_s_merge.columns:
             comp_s_merge[col_comp] = comp_s_merge[col_comp].fillna(0)
 
-
     for m in meses:
         comp_s_merge[m] = comp_s_merge[f"{m}_{comp_name}"] - comp_s_merge[f"{m}_{base_name}"]
-
 
     if show_debug:
         st.subheader("Diagnóstico do Merge - Comparativo Geral")
@@ -411,7 +407,6 @@ def gerar_passo1(xlsx_bytes, show_debug=False, visao="Request - Plan", incluir_o
             use_container_width=True
         )
 
-
     step1_serie = comp_s_merge[grp_serie + meses].copy()
     step1_serie["TOTAL"] = step1_serie[meses].sum(axis=1)
 
@@ -423,10 +418,9 @@ def gerar_passo1(xlsx_bytes, show_debug=False, visao="Request - Plan", incluir_o
     step1_serie = pd.concat([step1_serie, pd.DataFrame([total_s])], ignore_index=True)
 
     # =================================================
-    # RESUMO POR PRODUCT NEED (COMP - BASE)
-    # CORREÇÃO: calculado a partir do detalhado para sempre fechar.
+    # RESUMO POR SITE + BRAND + PRODUCT NEED (COMP - BASE)
     # =================================================
-    grp_need = ["SITE", "PRODUCT NEED", "PRODUCT BRAND"]
+    grp_need = ["SITE", "PRODUCT BRAND", "PRODUCT NEED"]
     step1_serie_sem_total = step1_serie[step1_serie["SITE"].astype(str).str.upper() != "TOTAL GERAL"].copy()
 
     step1_need = (
@@ -445,7 +439,7 @@ def gerar_passo1(xlsx_bytes, show_debug=False, visao="Request - Plan", incluir_o
     step1_need = pd.concat([step1_need, pd.DataFrame([total_n])], ignore_index=True)
 
     # =================================================
-    # RESUMO POR PRODUCT NEED (SOMENTE COMP)
+    # RESUMO FINAL POR SITE + BRAND + PRODUCT NEED (SOMENTE COMP)
     # =================================================
     comp_only_need = (
         comp_df[grp_need + meses]
@@ -464,11 +458,10 @@ def gerar_passo1(xlsx_bytes, show_debug=False, visao="Request - Plan", incluir_o
 
     # =================================================
     # NOVA TABELA — % de Atendimento (por Quarter)
-    # Definição: 
+    # Definição:
     # - Request - Plan: PLAN / REQUEST
     # - F.Response - Request: F.RESPONSE / REQUEST
     # =================================================
-
     def _mes_to_quarter(m_alias: str) -> str:
         mm = _normalize_header(m_alias).split('/')[0]
         if mm in ['jan', 'fev', 'mar']:
@@ -494,8 +487,16 @@ def gerar_passo1(xlsx_bytes, show_debug=False, visao="Request - Plan", incluir_o
     dem_g = demand_df[grp_att + meses].groupby(grp_att, dropna=False)[meses].sum().reset_index()
     sup_g = supply_df[grp_att + meses].groupby(grp_att, dropna=False)[meses].sum().reset_index()
 
-    how_att = 'outer' if incluir_outer else 'inner'
-    att = pd.merge(dem_g, sup_g, on=grp_att, how=how_att, suffixes=("_DEM", "_SUP")).fillna(0)
+    how_att = 'outer'
+    att = pd.merge(dem_g, sup_g, on=grp_att, how=how_att, suffixes=("_DEM", "_SUP"))
+
+    for m in meses:
+        dem_col = f"{m}_DEM"
+        sup_col = f"{m}_SUP"
+        if dem_col in att.columns:
+            att[dem_col] = att[dem_col].fillna(0)
+        if sup_col in att.columns:
+            att[sup_col] = att[sup_col].fillna(0)
 
     for q, mlist in quarter_months.items():
         if not mlist:
@@ -557,30 +558,28 @@ def gerar_passo1(xlsx_bytes, show_debug=False, visao="Request - Plan", incluir_o
     base_p = base_fc[meta_cols + meses].groupby(meta_cols, dropna=False)[meses].sum().reset_index()
     comp_p = comp_fc[meta_cols + meses].groupby(meta_cols, dropna=False)[meses].sum().reset_index()
 
-    
-comp_p_merge = pd.merge(
+    comp_p_merge = pd.merge(
         base_p, comp_p,
         on=meta_cols,
         how=how_merge,
         suffixes=(f"_{base_name}", f"_{comp_name}")
     )
 
-   for m in meses:
+    for m in meses:
         col_base = f"{m}_{base_name}"
         col_comp = f"{m}_{comp_name}"
-   if col_base in comp_p_merge.columns:
+        if col_base in comp_p_merge.columns:
             comp_p_merge[col_base] = comp_p_merge[col_base].fillna(0)
-   if col_comp in comp_p_merge.columns:
+        if col_comp in comp_p_merge.columns:
             comp_p_merge[col_comp] = comp_p_merge[col_comp].fillna(0)
 
-
     step1_product_fc = comp_p_merge[meta_cols].copy()
-   for m in meses:
+    for m in meses:
         step1_product_fc[m] = comp_p_merge[f"{m}_{comp_name}"] - comp_p_merge[f"{m}_{base_name}"]
     step1_product_fc["TOTAL"] = step1_product_fc[meses].sum(axis=1)
 
     total_prod = {c: "TOTAL GERAL" for c in meta_cols}
-   for m in meses:
+    for m in meses:
         total_prod[m] = step1_product_fc[m].sum()
     total_prod["TOTAL"] = step1_product_fc["TOTAL"].sum()
     step1_product_fc = pd.concat([step1_product_fc, pd.DataFrame([total_prod])], ignore_index=True)
@@ -672,15 +671,15 @@ if uploaded:
             uploaded.read(),
             show_debug=debug,
             visao=visao,
-                )
+        )
 
         st.subheader("Comparativo Geral")
         st.dataframe(formatar_tabela(df_serie), use_container_width=True)
 
-        st.subheader("Comparativo por SITE + PRODUCT NEED")
+        st.subheader("Comparativo por SITE + BRAND + PRODUCT NEED")
         st.dataframe(formatar_tabela(df_need), use_container_width=True)
 
-        st.subheader("Resumo final por PRODUCT NEED")
+        st.subheader("Resumo final por SITE + BRAND + PRODUCT NEED")
         st.dataframe(formatar_tabela(df_comp_need), use_container_width=True)
 
         st.subheader("% de Atendimento (por Quarter)")
@@ -698,3 +697,4 @@ if uploaded:
         st.exception(e)
 else:
     st.info("Faça upload do Excel para iniciar.")
+
