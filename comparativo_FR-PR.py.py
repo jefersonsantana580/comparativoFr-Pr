@@ -493,7 +493,7 @@ uploaded = st.file_uploader("Envie o Excel (PLAN, REQUEST e opcionalmente F.RESP
 col1, col2, col3 = st.columns([2, 2, 3])
 with col1:
     visao = st.radio("Visão", ["Request - Plan", "F.Response - Request"], horizontal=True)
-with col2:
+#with col2:
     incluir_outer = st.checkbox(
         "Incluir todos (outer)",
         value=False,
