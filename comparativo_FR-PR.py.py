@@ -339,27 +339,27 @@ def gerar_passo1(xlsx_bytes, show_debug=False, visao="Request - Plan", incluir_o
     req = aplicar_filtros(req)
     fr = aplicar_filtros(fr)
     
-key_cols = ["SITE", "PRODUCT NEED", "PRODUCT SERIES", "PRODUCT BRAND", "PRODUCT MARKET"]
-plan = normalizar_chaves(plan, key_cols)
-req  = normalizar_chaves(req, key_cols)
-fr   = normalizar_chaves(fr, key_cols)
+    key_cols = ["SITE", "PRODUCT NEED", "PRODUCT SERIES", "PRODUCT BRAND", "PRODUCT MARKET"]
+    plan = normalizar_chaves(plan, key_cols)
+    req  = normalizar_chaves(req, key_cols)
+    fr   = normalizar_chaves(fr, key_cols)
 
 # =================================================
     # Seleção BASE e COMP conforme visão
     # =================================================
-if visao == "F.Response - Request":
+    if visao == "F.Response - Request":
         base_name, comp_name = "REQUEST", "F.RESPONSE"
         base_df, comp_df = req, fr
-else:
+    else:
         base_name, comp_name = "PLAN", "REQUEST"
         base_df, comp_df = plan, req
-
-how_merge = "outer"
+       
+    how_merge = "outer"
 
     # =================================================
     # TABELA DETALHADA — PRODUCT NEED + PRODUCT SERIES + BRAND + MARKET
     # =================================================
-grp_serie = [
+    grp_serie = [
         "SITE",
         "PRODUCT NEED",
         "PRODUCT SERIES",
@@ -371,7 +371,7 @@ grp_serie = [
     comp_s = comp_df[grp_serie + meses].groupby(grp_serie, dropna=False)[meses].sum().reset_index()
 
     
-comp_s_merge = pd.merge(
+    comp_s_merge = pd.merge(
         base_s, comp_s,
         on=grp_serie,
         how=how_merge,
