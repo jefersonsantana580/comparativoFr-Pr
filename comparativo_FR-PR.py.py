@@ -347,14 +347,14 @@ fr   = normalizar_chaves(fr, key_cols)
 # =================================================
     # Seleção BASE e COMP conforme visão
     # =================================================
-    if visao == "F.Response - Request":
+if visao == "F.Response - Request":
         base_name, comp_name = "REQUEST", "F.RESPONSE"
         base_df, comp_df = req, fr
-    else:
+else:
         base_name, comp_name = "PLAN", "REQUEST"
         base_df, comp_df = plan, req
 
-    how_merge = "outer"
+how_merge = "outer"
 
     # =================================================
     # TABELA DETALHADA — PRODUCT NEED + PRODUCT SERIES + BRAND + MARKET
