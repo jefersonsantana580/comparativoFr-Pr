@@ -565,22 +565,22 @@ comp_p_merge = pd.merge(
         suffixes=(f"_{base_name}", f"_{comp_name}")
     )
 
-    for m in meses:
+   for m in meses:
         col_base = f"{m}_{base_name}"
         col_comp = f"{m}_{comp_name}"
-    if col_base in comp_p_merge.columns:
+   if col_base in comp_p_merge.columns:
             comp_p_merge[col_base] = comp_p_merge[col_base].fillna(0)
-    if col_comp in comp_p_merge.columns:
+   if col_comp in comp_p_merge.columns:
             comp_p_merge[col_comp] = comp_p_merge[col_comp].fillna(0)
 
 
     step1_product_fc = comp_p_merge[meta_cols].copy()
-    for m in meses:
+   for m in meses:
         step1_product_fc[m] = comp_p_merge[f"{m}_{comp_name}"] - comp_p_merge[f"{m}_{base_name}"]
     step1_product_fc["TOTAL"] = step1_product_fc[meses].sum(axis=1)
 
     total_prod = {c: "TOTAL GERAL" for c in meta_cols}
-    for m in meses:
+   for m in meses:
         total_prod[m] = step1_product_fc[m].sum()
     total_prod["TOTAL"] = step1_product_fc["TOTAL"].sum()
     step1_product_fc = pd.concat([step1_product_fc, pd.DataFrame([total_prod])], ignore_index=True)
