@@ -837,6 +837,7 @@ with col1:
 with col3:
     debug = st.checkbox("Exibir diagnóstico", value=False)
 
+
 if uploaded:
     try:
         excel_out, df_serie, df_need, df_comp_need, df_atend = gerar_passo1(
@@ -850,36 +851,35 @@ if uploaded:
             df_serie,
             ["SITE", "PRODUCT NEED", "PRODUCT SERIES", "PRODUCT BRAND", "PRODUCT MARKET"]
         )
+
         df_need_view = ocultar_linhas_sem_chave(
             df_need,
             ["SITE", "PRODUCT BRAND", "PRODUCT NEED"]
         )
+
         df_comp_need_view = ocultar_linhas_sem_chave(
             df_comp_need,
             ["SITE", "PRODUCT BRAND", "PRODUCT NEED"]
         )
+
         df_atend_view = ocultar_linhas_sem_chave(
             df_atend,
             ["SITE", "PRODUCT NEED", "PRODUCT SERIES"]
         )
 
-        
-st.subheader("Comparativo Geral")
-st.dataframe(formatar_tabela(df_serie_view), use_container_width=True)
+        st.subheader("Comparativo Geral")
+        st.dataframe(formatar_tabela(df_serie_view), use_container_width=True)
 
-st.subheader("Comparativo por SITE + BRAND + PRODUCT NEED")
-st.dataframe(formatar_tabela(df_need_view), use_container_width=True)
+        st.subheader("Comparativo por SITE + BRAND + PRODUCT NEED")
+        st.dataframe(formatar_tabela(df_need_view), use_container_width=True)
 
-st.subheader("Resumo final por SITE + BRAND + PRODUCT NEED")
-st.dataframe(formatar_tabela(df_comp_need_view), use_container_width=True)
+        st.subheader("Resumo final por SITE + BRAND + PRODUCT NEED")
+        st.dataframe(formatar_tabela(df_comp_need_view), use_container_width=True)
 
-if visao == "F.Response - Request":
-    st.subheader("% de Atendimento (por Quarter)")
-    st.dataframe(formatar_tabela_percent(df_atend_view), use_container_width=True)
-
-        
-
-
+        # MOSTRAR APENAS NA VISÃO F.Response - Request
+        if visao == "F.Response - Request":
+            st.subheader("% de Atendimento (por Quarter)")
+            st.dataframe(formatar_tabela_percent(df_atend_view), use_container_width=True)
 
         nome_saida = f"saida_step1_{visao.replace(' ', '_').replace('.', '')}_.xlsx"
         st.download_button(
