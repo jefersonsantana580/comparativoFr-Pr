@@ -735,7 +735,8 @@ def gerar_passo1(xlsx_bytes, show_debug=False, visao="Request - Plan", incluir_o
     total_prod["TOTAL"] = step1_product_fc["TOTAL"].sum()
     step1_product_fc = pd.concat([step1_product_fc, pd.DataFrame([total_prod])], ignore_index=True)
 
-    # =================================================
+    
+# =================================================
     # EXPORTAR EXCEL (FORMATADO)
     # =================================================
     from openpyxl.styles import Font
@@ -744,7 +745,11 @@ def gerar_passo1(xlsx_bytes, show_debug=False, visao="Request - Plan", incluir_o
     buf_out = io.BytesIO()
     with pd.ExcelWriter(buf_out, engine="openpyxl") as writer:
         for sheet in xls_original.sheet_names:
-            pd.read_excel(xls_original, sheet, engine="openpyxl").to_excel(writer, sheet_name=sheet, index=False)
+            pd.read_excel(xls_original, sheet, engine="openpyxl").to_excel(
+                writer,
+                sheet_name=sheet,
+                index=False
+            )
 
         abas = {
             "Step1_Comparativo_Serie": step1_serie,
@@ -759,37 +764,45 @@ def gerar_passo1(xlsx_bytes, show_debug=False, visao="Request - Plan", incluir_o
             df.to_excel(writer, sheet_name=sheet_name, index=False)
             ws = writer.book[sheet_name]
 
-            # Formatação especial para atendimento (%): gravar como porcentagem no Excel
-           
-if sheet_name == "Atendimento_%_Quarter":
-    perc_cols = ['Q1', 'Q2', 'Q3', 'Q4', 'TOTAL']
-    for pc in perc_cols:
-        if pc in df.columns:
-            col_idx = df.columns.get_loc(pc) + 1
-            for row in ws.iter_rows(min_row=2, max_row=ws.max_row):
-                cell = row[col_idx - 1]
-                if isinstance(cell.value, (int, float)):
-                    valor_original = cell.value
-                    cell.value = valor_original / 100.0
-                    cell.number_format = '0%'
+            # ============================================
+            # FORMATAÇÃO ESPECIAL PARA ATENDIMENTO (%)
+            # ============================================
+            if sheet_name == "Atendimento_%_Quarter":
+                perc_cols = ["Q1", "Q2", "Q3", "Q4", "TOTAL"]
 
-                    if valor_original <= 50:
-                        cell.font = Font(color="FF0000", bold=True)   # vermelho
-                    elif valor_original < 80:
-                        cell.font = Font(color="FFC000", bold=True)   # amarelo
-                    else:
-                        cell.font = Font(color="008000", bold=True)   # verde
+                for pc in perc_cols:
+                    if pc in df.columns:
+                        col_idx = df.columns.get_loc(pc) + 1
 
+                        for row in ws.iter_rows(min_row=2, max_row=ws.max_row):
+                            cell = row[col_idx - 1]
 
+                            if isinstance(cell.value, (int, float)):
+                                valor_original = cell.value  # ex.: 45, 72, 88
+                                cell.value = valor_original / 100.0
+                                cell.number_format = "0%"
+
+                                if valor_original <= 50:
+                                    cell.font = Font(color="FF0000", bold=True)   # vermelho
+                                elif valor_original < 80:
+                                    cell.font = Font(color="FFC000", bold=True)   # amarelo
+                                else:
+                                    cell.font = Font(color="008000", bold=True)   # verde
+
+            # ============================================
+            # FORMATAÇÃO DAS DEMAIS ABAS NUMÉRICAS
+            # ============================================
             cols_num = df.select_dtypes(include="number").columns
             idx_cols = [df.columns.get_loc(c) + 1 for c in cols_num]
 
             for row in ws.iter_rows(min_row=2, max_row=ws.max_row):
                 for idx in idx_cols:
                     cell = row[idx - 1]
+
                     if isinstance(cell.value, (int, float)):
                         if sheet_name != "Atendimento_%_Quarter":
-                            cell.number_format = '#,##0'
+                            cell.number_format = "#,##0"
+
                             if cell.value < 0:
                                 cell.font = Font(color="FF0000", bold=True)
                             elif cell.value > 0:
@@ -799,12 +812,14 @@ if sheet_name == "Atendimento_%_Quarter":
                     for cell in row:
                         cell.font = Font(bold=True)
 
+            # Ajusta largura das colunas
             for col in ws.columns:
                 max_len = 0
                 for cell in col:
                     if cell.value is None:
                         continue
                     max_len = max(max_len, len(str(cell.value)))
+
                 ws.column_dimensions[get_column_letter(col[0].column)].width = max_len + 2
 
     return buf_out.getvalue(), step1_serie, step1_need, comp_only_need, df_atendimento
