@@ -122,13 +122,23 @@ def formatar_tabela(df):
     return styler
 
 
+
 def colorir_percent(val):
-    """Cores para percentuais: <100 vermelho; >=100 verde."""
+    """
+    Regras de cor para percentuais:
+    <= 50%  -> vermelho
+    51% a 79% -> amarelo
+    >= 80% -> verde
+    """
     if isinstance(val, (int, float)):
-        if val < 100:
+        if val <= 50:
             return "color:red;font-weight:bold;"
-        return "color:green;font-weight:bold;"
+        elif val < 80:
+            return "color:#d4a017;font-weight:bold;"   # amarelo mais legível no fundo claro/escuro
+        else:
+            return "color:green;font-weight:bold;"
     return ""
+
 
 
 def formatar_tabela_percent(df):
