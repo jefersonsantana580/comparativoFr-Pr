@@ -738,8 +738,8 @@ def gerar_passo1(xlsx_bytes, show_debug=False, visao="Request - Plan", incluir_o
 
     
 # ============================================
-            # FORMATAÇÃO ESPECIAL PARA ATENDIMENTO (%)
-            # ============================================
+# FORMATAÇÃO ESPECIAL PARA ATENDIMENTO (%)
+# ============================================
             if sheet_name == "Atendimento_%_Quarter":
                 perc_cols = ['Q1', 'Q2', 'Q3', 'Q4', 'TOTAL']
 
