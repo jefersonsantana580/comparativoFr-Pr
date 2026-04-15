@@ -863,6 +863,7 @@ if uploaded:
             ["SITE", "PRODUCT NEED", "PRODUCT SERIES"]
         )
 
+        
         st.subheader("Comparativo Geral")
         st.dataframe(formatar_tabela(df_serie_view), use_container_width=True)
 
@@ -872,8 +873,11 @@ if uploaded:
         st.subheader("Resumo final por SITE + BRAND + PRODUCT NEED")
         st.dataframe(formatar_tabela(df_comp_need_view), use_container_width=True)
 
+        if visao == "F.Response - Request":
         st.subheader("% de Atendimento (por Quarter)")
         st.dataframe(formatar_tabela_percent(df_atend_view), use_container_width=True)
+
+
 
         nome_saida = f"saida_step1_{visao.replace(' ', '_').replace('.', '')}_.xlsx"
         st.download_button(
