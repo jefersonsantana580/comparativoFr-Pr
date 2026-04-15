@@ -867,11 +867,11 @@ if uploaded:
             ["SITE", "PRODUCT NEED", "PRODUCT SERIES"]
         )
 
-        st.subheader("Comparativo Geral")
-        st.dataframe(formatar_tabela(df_serie_view), use_container_width=True)
-
         st.subheader("Comparativo por SITE + BRAND + PRODUCT NEED")
         st.dataframe(formatar_tabela(df_need_view), use_container_width=True)
+
+        st.subheader("Comparativo Geral")
+        st.dataframe(formatar_tabela(df_serie_view), use_container_width=True)        
 
         st.subheader("Resumo final por SITE + BRAND + PRODUCT NEED")
         st.dataframe(formatar_tabela(df_comp_need_view), use_container_width=True)
