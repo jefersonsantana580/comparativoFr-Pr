@@ -864,18 +864,20 @@ if uploaded:
         )
 
         
-        st.subheader("Comparativo Geral")
-        st.dataframe(formatar_tabela(df_serie_view), use_container_width=True)
+st.subheader("Comparativo Geral")
+st.dataframe(formatar_tabela(df_serie_view), use_container_width=True)
 
-        st.subheader("Comparativo por SITE + BRAND + PRODUCT NEED")
-        st.dataframe(formatar_tabela(df_need_view), use_container_width=True)
+st.subheader("Comparativo por SITE + BRAND + PRODUCT NEED")
+st.dataframe(formatar_tabela(df_need_view), use_container_width=True)
 
-        st.subheader("Resumo final por SITE + BRAND + PRODUCT NEED")
-        st.dataframe(formatar_tabela(df_comp_need_view), use_container_width=True)
+st.subheader("Resumo final por SITE + BRAND + PRODUCT NEED")
+st.dataframe(formatar_tabela(df_comp_need_view), use_container_width=True)
 
-        if visao == "F.Response - Request":
-        st.subheader("% de Atendimento (por Quarter)")
-        st.dataframe(formatar_tabela_percent(df_atend_view), use_container_width=True)
+if visao == "F.Response - Request":
+    st.subheader("% de Atendimento (por Quarter)")
+    st.dataframe(formatar_tabela_percent(df_atend_view), use_container_width=True)
+
+        
 
 
 
