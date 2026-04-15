@@ -1,3 +1,4 @@
+
 # -*- coding: utf-8 -*-
 import io
 import re
@@ -29,7 +30,7 @@ MES_RE = re.compile(
 # =====================================================
 def _normalize_header(col):
     if isinstance(col, (pd.Timestamp, dt.date)):
-        return f"{PT_BR_MESES[col.month-1]}/{col.year % 100:02d}"
+        return f"{PT_BR_MESES[col.month - 1]}/{col.year % 100:02d}"
 
     s = str(col).replace("\u00a0", " ").strip().lower()
     s = re.sub(r"[-_ ]+", "/", s)
@@ -63,9 +64,24 @@ def detectar_colunas_mes(df):
 
 
 def garantir_numerico(df, meses):
+    if df is None:
+        return None
+
     for m in meses:
         if m in df.columns:
             df[m] = pd.to_numeric(df[m], errors="coerce")
+    return df
+
+
+def garantir_colunas(df, cols, fill_value=0):
+    """Garante que todas as colunas existam no dataframe."""
+    if df is None:
+        return None
+
+    df = df.copy()
+    for c in cols:
+        if c not in df.columns:
+            df[c] = fill_value
     return df
 
 
@@ -79,10 +95,17 @@ def colorir_valores(val):
 
 
 def formatar_tabela(df):
-    df = df.fillna(0)
-    cols_num = df.select_dtypes(include="number").columns
+    out = df.copy()
 
-    styler = df.style.format(lambda x: f"{x:,.0f}".replace(",", "."), subset=cols_num)
+    cols_num = out.select_dtypes(include="number").columns
+    cols_txt = out.columns.difference(cols_num)
+
+    if len(cols_num) > 0:
+        out[cols_num] = out[cols_num].fillna(0)
+    if len(cols_txt) > 0:
+        out[cols_txt] = out[cols_txt].fillna("")
+
+    styler = out.style.format(lambda x: f"{x:,.0f}".replace(",", "."), subset=cols_num)
 
     # Compatibilidade: pandas novos usam .map; antigos, .applymap
     if hasattr(styler, "map"):
@@ -93,7 +116,7 @@ def formatar_tabela(df):
     styler = (
         styler
         .set_properties(subset=cols_num, **{"text-align": "center"})
-        .set_properties(subset=df.columns.difference(cols_num), **{"text-align": "left"})
+        .set_properties(subset=cols_txt, **{"text-align": "left"})
     )
 
     return styler
@@ -109,11 +132,17 @@ def colorir_percent(val):
 
 
 def formatar_tabela_percent(df):
-    """Formata tabela de percentuais no padrão 90% / 100%."""
-    df = df.fillna(0)
-    cols_num = df.select_dtypes(include="number").columns
+    out = df.copy()
 
-    styler = df.style.format(lambda x: f"{x:.0f}%", subset=cols_num)
+    cols_num = out.select_dtypes(include="number").columns
+    cols_txt = out.columns.difference(cols_num)
+
+    if len(cols_num) > 0:
+        out[cols_num] = out[cols_num].fillna(0)
+    if len(cols_txt) > 0:
+        out[cols_txt] = out[cols_txt].fillna("")
+
+    styler = out.style.format(lambda x: f"{x:.0f}%", subset=cols_num)
 
     if hasattr(styler, "map"):
         styler = styler.map(colorir_percent, subset=cols_num)
@@ -123,7 +152,7 @@ def formatar_tabela_percent(df):
     styler = (
         styler
         .set_properties(subset=cols_num, **{"text-align": "center"})
-        .set_properties(subset=df.columns.difference(cols_num), **{"text-align": "left"})
+        .set_properties(subset=cols_txt, **{"text-align": "left"})
     )
 
     return styler
@@ -133,16 +162,69 @@ def normalizar_chaves(df, cols):
     if df is None:
         return None
 
+    df = df.copy()
     for c in cols:
         if c in df.columns:
             df[c] = (
                 df[c]
                 .fillna("")
                 .astype(str)
+                .str.replace("\u00a0", " ", regex=False)
                 .str.strip()
                 .str.upper()
             )
     return df
+
+
+def remover_linhas_sem_chave(df, cols_chave):
+    """
+    Remove linhas em que TODAS as colunas-chave estão vazias.
+    Como você NÃO tem células mescladas, essa é a correção correta.
+    """
+    if df is None:
+        return None
+
+    df = df.copy()
+    cols_existentes = [c for c in cols_chave if c in df.columns]
+
+    if not cols_existentes:
+        return df
+
+    tmp = df[cols_existentes].copy()
+
+    for c in cols_existentes:
+        tmp[c] = (
+            tmp[c]
+            .fillna("")
+            .astype(str)
+            .str.replace("\u00a0", " ", regex=False)
+            .str.strip()
+        )
+
+    mask_linha_vazia = tmp.eq("").all(axis=1)
+
+    return df.loc[~mask_linha_vazia].copy()
+
+
+def ocultar_linhas_sem_chave(df, cols_chave):
+    """
+    Defesa extra: evita exibir linhas totalmente vazias,
+    caso alguma ainda escape.
+    """
+    if df is None:
+        return df
+
+    df = df.copy()
+    cols_existentes = [c for c in cols_chave if c in df.columns]
+    if not cols_existentes:
+        return df
+
+    tmp = df[cols_existentes].copy()
+    for c in cols_existentes:
+        tmp[c] = tmp[c].fillna("").astype(str).str.strip()
+
+    mask = ~tmp.eq("").all(axis=1)
+    return df.loc[mask].copy()
 
 
 # =====================================================
@@ -174,11 +256,15 @@ def gerar_passo1(xlsx_bytes, show_debug=False, visao="Request - Plan", incluir_o
     if not meses:
         raise ValueError("Nenhuma coluna de mês encontrada.")
 
+    # Garante que todos os dataframes tenham todos os meses
+    plan = garantir_colunas(plan, meses, 0)
+    req = garantir_colunas(req, meses, 0)
+    fr = garantir_colunas(fr, meses, 0)
+
     # Força numérico
     plan = garantir_numerico(plan, meses)
     req = garantir_numerico(req, meses)
-    if fr is not None:
-        fr = garantir_numerico(fr, meses)
+    fr = garantir_numerico(fr, meses)
 
     if show_debug:
         st.subheader("Diagnóstico PLAN")
@@ -202,7 +288,12 @@ def gerar_passo1(xlsx_bytes, show_debug=False, visao="Request - Plan", incluir_o
     # garante string nas colunas de filtro
     for col in ["PRODUCT BRAND", "PRODUCT MARKET", "SITE", "PRODUCT NEED"]:
         if col in union_df.columns:
-            union_df[col] = union_df[col].astype(str)
+            union_df[col] = (
+                union_df[col]
+                .fillna("")
+                .astype(str)
+                .str.strip()
+            )
 
     # inicializa estado
     for k in ["f_brand", "f_market", "f_site", "f_need"]:
@@ -222,13 +313,13 @@ def gerar_passo1(xlsx_bytes, show_debug=False, visao="Request - Plan", incluir_o
     def filtrar_base(df, brand=None, market=None, site=None, need=None):
         out = df.copy()
 
-        if brand:
+        if brand and "PRODUCT BRAND" in out.columns:
             out = out[out["PRODUCT BRAND"].isin(brand)]
-        if market:
+        if market and "PRODUCT MARKET" in out.columns:
             out = out[out["PRODUCT MARKET"].isin(market)]
-        if site:
+        if site and "SITE" in out.columns:
             out = out[out["SITE"].isin(site)]
-        if need:
+        if need and "PRODUCT NEED" in out.columns:
             out = out[out["PRODUCT NEED"].isin(need)]
 
         return out
@@ -236,7 +327,14 @@ def gerar_passo1(xlsx_bytes, show_debug=False, visao="Request - Plan", incluir_o
     def opcoes_validas(df, coluna):
         if coluna not in df.columns:
             return []
-        return sorted(df[coluna].dropna().astype(str).unique().tolist())
+        vals = (
+            df[coluna]
+            .dropna()
+            .astype(str)
+            .str.strip()
+        )
+        vals = vals[vals != ""]
+        return sorted(vals.unique().tolist())
 
     c1, c2, c3, c4 = st.columns([1.1, 1.6, 1.0, 1.5])
 
@@ -320,28 +418,44 @@ def gerar_passo1(xlsx_bytes, show_debug=False, visao="Request - Plan", incluir_o
         if df is None:
             return None
 
-        if st.session_state["f_brand"] and "PRODUCT BRAND" in df.columns:
-            df = df[df["PRODUCT BRAND"].astype(str).isin(st.session_state["f_brand"])]
+        out = df.copy()
 
-        if st.session_state["f_market"] and "PRODUCT MARKET" in df.columns:
-            df = df[df["PRODUCT MARKET"].astype(str).isin(st.session_state["f_market"])]
+        if st.session_state["f_brand"] and "PRODUCT BRAND" in out.columns:
+            out = out[out["PRODUCT BRAND"].fillna("").astype(str).isin(st.session_state["f_brand"])]
 
-        if st.session_state["f_site"] and "SITE" in df.columns:
-            df = df[df["SITE"].astype(str).isin(st.session_state["f_site"])]
+        if st.session_state["f_market"] and "PRODUCT MARKET" in out.columns:
+            out = out[out["PRODUCT MARKET"].fillna("").astype(str).isin(st.session_state["f_market"])]
 
-        if st.session_state["f_need"] and "PRODUCT NEED" in df.columns:
-            df = df[df["PRODUCT NEED"].astype(str).isin(st.session_state["f_need"])]
+        if st.session_state["f_site"] and "SITE" in out.columns:
+            out = out[out["SITE"].fillna("").astype(str).isin(st.session_state["f_site"])]
 
-        return df
+        if st.session_state["f_need"] and "PRODUCT NEED" in out.columns:
+            out = out[out["PRODUCT NEED"].fillna("").astype(str).isin(st.session_state["f_need"])]
+
+        return out
 
     plan = aplicar_filtros(plan)
     req = aplicar_filtros(req)
     fr = aplicar_filtros(fr)
 
     key_cols = ["SITE", "PRODUCT NEED", "PRODUCT SERIES", "PRODUCT BRAND", "PRODUCT MARKET"]
+
+    # NORMALIZA AS CHAVES
     plan = normalizar_chaves(plan, key_cols)
     req = normalizar_chaves(req, key_cols)
     fr = normalizar_chaves(fr, key_cols)
+
+    # REMOVE LINHAS TOTALMENTE SEM CHAVE (CORREÇÃO PRINCIPAL)
+    plan = remover_linhas_sem_chave(plan, key_cols)
+    req = remover_linhas_sem_chave(req, key_cols)
+    fr = remover_linhas_sem_chave(fr, key_cols)
+
+    if show_debug:
+        st.subheader("Diagnóstico — linhas sem chave após limpeza")
+        st.write("PLAN:", len(plan))
+        st.write("REQUEST:", len(req))
+        if fr is not None:
+            st.write("F.RESPONSE:", len(fr))
 
     # =================================================
     # Seleção BASE e COMP conforme visão
@@ -353,7 +467,7 @@ def gerar_passo1(xlsx_bytes, show_debug=False, visao="Request - Plan", incluir_o
         base_name, comp_name = "PLAN", "REQUEST"
         base_df, comp_df = plan, req
 
-    how_merge = "outer"
+    how_merge = "outer" if incluir_outer else "inner"
 
     # =================================================
     # TABELA DETALHADA — PRODUCT NEED + PRODUCT SERIES + BRAND + MARKET
@@ -365,6 +479,9 @@ def gerar_passo1(xlsx_bytes, show_debug=False, visao="Request - Plan", incluir_o
         "PRODUCT BRAND",
         "PRODUCT MARKET",
     ]
+
+    base_df = garantir_colunas(base_df, grp_serie + meses, 0)
+    comp_df = garantir_colunas(comp_df, grp_serie + meses, 0)
 
     base_s = base_df[grp_serie + meses].groupby(grp_serie, dropna=False)[meses].sum().reset_index()
     comp_s = comp_df[grp_serie + meses].groupby(grp_serie, dropna=False)[meses].sum().reset_index()
@@ -408,6 +525,7 @@ def gerar_passo1(xlsx_bytes, show_debug=False, visao="Request - Plan", incluir_o
         )
 
     step1_serie = comp_s_merge[grp_serie + meses].copy()
+    step1_serie = remover_linhas_sem_chave(step1_serie, grp_serie)
     step1_serie["TOTAL"] = step1_serie[meses].sum(axis=1)
 
     # Linha TOTAL GERAL (detalhado)
@@ -429,6 +547,8 @@ def gerar_passo1(xlsx_bytes, show_debug=False, visao="Request - Plan", incluir_o
         .sum()
         .reset_index()
     )
+
+    step1_need = remover_linhas_sem_chave(step1_need, grp_need)
     step1_need["TOTAL"] = step1_need[meses].sum(axis=1)
 
     total_n = {c: "TOTAL GERAL" for c in grp_need}
@@ -447,6 +567,8 @@ def gerar_passo1(xlsx_bytes, show_debug=False, visao="Request - Plan", incluir_o
         .sum()
         .reset_index()
     )
+
+    comp_only_need = remover_linhas_sem_chave(comp_only_need, grp_need)
     comp_only_need["TOTAL"] = comp_only_need[meses].sum(axis=1)
 
     total_comp = {c: "TOTAL GERAL" for c in grp_need}
@@ -484,8 +606,14 @@ def gerar_passo1(xlsx_bytes, show_debug=False, visao="Request - Plan", incluir_o
 
     grp_att = ["SITE", "PRODUCT NEED", "PRODUCT SERIES"]
 
+    demand_df = garantir_colunas(demand_df, grp_att + meses, 0)
+    supply_df = garantir_colunas(supply_df, grp_att + meses, 0)
+
     dem_g = demand_df[grp_att + meses].groupby(grp_att, dropna=False)[meses].sum().reset_index()
     sup_g = supply_df[grp_att + meses].groupby(grp_att, dropna=False)[meses].sum().reset_index()
+
+    dem_g = remover_linhas_sem_chave(dem_g, grp_att)
+    sup_g = remover_linhas_sem_chave(sup_g, grp_att)
 
     how_att = 'outer'
     att = pd.merge(dem_g, sup_g, on=grp_att, how=how_att, suffixes=("_DEM", "_SUP"))
@@ -502,8 +630,10 @@ def gerar_passo1(xlsx_bytes, show_debug=False, visao="Request - Plan", incluir_o
         if not mlist:
             att[q] = 100.0
             continue
+
         dem_q = sum(att[f"{m}_DEM"] for m in mlist)
         sup_q = sum(att[f"{m}_SUP"] for m in mlist)
+
         att[q] = (sup_q / dem_q * 100).where(dem_q > 0, 100.0)
 
     dem_tot = sum(att[f"{m}_DEM"] for m in meses)
@@ -514,14 +644,17 @@ def gerar_passo1(xlsx_bytes, show_debug=False, visao="Request - Plan", incluir_o
         att[c] = att[c].clip(lower=0, upper=100)
 
     df_atendimento = att[grp_att + ['Q1', 'Q2', 'Q3', 'Q4', 'TOTAL']].copy()
+    df_atendimento = remover_linhas_sem_chave(df_atendimento, grp_att)
 
     total_att = {c: 'TOTAL GERAL' for c in grp_att}
     for q, mlist in quarter_months.items():
         if not mlist:
             total_att[q] = 100.0
             continue
+
         dem_q = sum(att[f"{m}_DEM"] for m in mlist).sum()
         sup_q = sum(att[f"{m}_SUP"] for m in mlist).sum()
+
         total_att[q] = (sup_q / dem_q * 100) if dem_q > 0 else 100.0
         total_att[q] = max(0.0, min(100.0, total_att[q]))
 
@@ -537,14 +670,14 @@ def gerar_passo1(xlsx_bytes, show_debug=False, visao="Request - Plan", incluir_o
     # Mantém exatamente o padrão de colunas das abas originais
     # =================================================
     if "DEMAND TYPE" in base_df.columns:
-        base_fc = base_df[base_df["DEMAND TYPE"] == "FC"]
+        base_fc = base_df[base_df["DEMAND TYPE"] == "FC"].copy()
     else:
-        base_fc = base_df.iloc[0:0]
+        base_fc = base_df.iloc[0:0].copy()
 
     if "DEMAND TYPE" in comp_df.columns:
-        comp_fc = comp_df[comp_df["DEMAND TYPE"] == "FC"]
+        comp_fc = comp_df[comp_df["DEMAND TYPE"] == "FC"].copy()
     else:
-        comp_fc = comp_df.iloc[0:0]
+        comp_fc = comp_df.iloc[0:0].copy()
 
     month_positions = [plan.columns.get_loc(c) for c in meses if c in plan.columns]
     if month_positions:
@@ -554,6 +687,13 @@ def gerar_passo1(xlsx_bytes, show_debug=False, visao="Request - Plan", incluir_o
         month_positions_b = [base_df.columns.get_loc(c) for c in meses if c in base_df.columns]
         first_month_pos = min(month_positions_b) if month_positions_b else len(base_df.columns)
         meta_cols = list(base_df.columns[:first_month_pos])
+
+    base_fc = garantir_colunas(base_fc, meta_cols + meses, 0)
+    comp_fc = garantir_colunas(comp_fc, meta_cols + meses, 0)
+
+    # remove linhas totalmente vazias nas colunas-meta
+    base_fc = remover_linhas_sem_chave(base_fc, [c for c in meta_cols if c in base_fc.columns] or meta_cols)
+    comp_fc = remover_linhas_sem_chave(comp_fc, [c for c in meta_cols if c in comp_fc.columns] or meta_cols)
 
     base_p = base_fc[meta_cols + meses].groupby(meta_cols, dropna=False)[meses].sum().reset_index()
     comp_p = comp_fc[meta_cols + meses].groupby(meta_cols, dropna=False)[meses].sum().reset_index()
@@ -576,6 +716,8 @@ def gerar_passo1(xlsx_bytes, show_debug=False, visao="Request - Plan", incluir_o
     step1_product_fc = comp_p_merge[meta_cols].copy()
     for m in meses:
         step1_product_fc[m] = comp_p_merge[f"{m}_{comp_name}"] - comp_p_merge[f"{m}_{base_name}"]
+
+    step1_product_fc = remover_linhas_sem_chave(step1_product_fc, meta_cols)
     step1_product_fc["TOTAL"] = step1_product_fc[meses].sum(axis=1)
 
     total_prod = {c: "TOTAL GERAL" for c in meta_cols}
@@ -593,7 +735,7 @@ def gerar_passo1(xlsx_bytes, show_debug=False, visao="Request - Plan", incluir_o
     buf_out = io.BytesIO()
     with pd.ExcelWriter(buf_out, engine="openpyxl") as writer:
         for sheet in xls_original.sheet_names:
-            pd.read_excel(xls_original, sheet).to_excel(writer, sheet_name=sheet, index=False)
+            pd.read_excel(xls_original, sheet, engine="openpyxl").to_excel(writer, sheet_name=sheet, index=False)
 
         abas = {
             "Step1_Comparativo_Serie": step1_serie,
@@ -673,17 +815,35 @@ if uploaded:
             visao=visao,
         )
 
+        # Defesa extra na exibição
+        df_serie_view = ocultar_linhas_sem_chave(
+            df_serie,
+            ["SITE", "PRODUCT NEED", "PRODUCT SERIES", "PRODUCT BRAND", "PRODUCT MARKET"]
+        )
+        df_need_view = ocultar_linhas_sem_chave(
+            df_need,
+            ["SITE", "PRODUCT BRAND", "PRODUCT NEED"]
+        )
+        df_comp_need_view = ocultar_linhas_sem_chave(
+            df_comp_need,
+            ["SITE", "PRODUCT BRAND", "PRODUCT NEED"]
+        )
+        df_atend_view = ocultar_linhas_sem_chave(
+            df_atend,
+            ["SITE", "PRODUCT NEED", "PRODUCT SERIES"]
+        )
+
         st.subheader("Comparativo Geral")
-        st.dataframe(formatar_tabela(df_serie), use_container_width=True)
+        st.dataframe(formatar_tabela(df_serie_view), use_container_width=True)
 
         st.subheader("Comparativo por SITE + BRAND + PRODUCT NEED")
-        st.dataframe(formatar_tabela(df_need), use_container_width=True)
+        st.dataframe(formatar_tabela(df_need_view), use_container_width=True)
 
         st.subheader("Resumo final por SITE + BRAND + PRODUCT NEED")
-        st.dataframe(formatar_tabela(df_comp_need), use_container_width=True)
+        st.dataframe(formatar_tabela(df_comp_need_view), use_container_width=True)
 
         st.subheader("% de Atendimento (por Quarter)")
-        st.dataframe(formatar_tabela_percent(df_atend), use_container_width=True)
+        st.dataframe(formatar_tabela_percent(df_atend_view), use_container_width=True)
 
         nome_saida = f"saida_step1_{visao.replace(' ', '_').replace('.', '')}_.xlsx"
         st.download_button(
@@ -697,4 +857,3 @@ if uploaded:
         st.exception(e)
 else:
     st.info("Faça upload do Excel para iniciar.")
-
