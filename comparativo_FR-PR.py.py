@@ -761,20 +761,26 @@ def gerar_passo1(xlsx_bytes, show_debug=False, visao="Request - Plan", incluir_o
             ws = writer.book[sheet_name]
 
             # Formatação especial para atendimento (%): gravar como porcentagem no Excel
-            if sheet_name == "Atendimento_%_Quarter":
-                perc_cols = ['Q1', 'Q2', 'Q3', 'Q4', 'TOTAL']
-                for pc in perc_cols:
-                    if pc in df.columns:
-                        col_idx = df.columns.get_loc(pc) + 1
-                        for row in ws.iter_rows(min_row=2, max_row=ws.max_row):
-                            cell = row[col_idx - 1]
-                            if isinstance(cell.value, (int, float)):
-                                cell.value = cell.value / 100.0
-                                cell.number_format = '0%'
-                                if cell.value < 1:
-                                    cell.font = Font(color="FF0000", bold=True)
-                                else:
-                                    cell.font = Font(color="008000", bold=True)
+           
+if sheet_name == "Atendimento_%_Quarter":
+    perc_cols = ['Q1', 'Q2', 'Q3', 'Q4', 'TOTAL']
+    for pc in perc_cols:
+        if pc in df.columns:
+            col_idx = df.columns.get_loc(pc) + 1
+            for row in ws.iter_rows(min_row=2, max_row=ws.max_row):
+                cell = row[col_idx - 1]
+                if isinstance(cell.value, (int, float)):
+                    valor_original = cell.value
+                    cell.value = valor_original / 100.0
+                    cell.number_format = '0%'
+
+                    if valor_original <= 50:
+                        cell.font = Font(color="FF0000", bold=True)   # vermelho
+                    elif valor_original < 80:
+                        cell.font = Font(color="FFC000", bold=True)   # amarelo
+                    else:
+                        cell.font = Font(color="008000", bold=True)   # verde
+
 
             cols_num = df.select_dtypes(include="number").columns
             idx_cols = [df.columns.get_loc(c) + 1 for c in cols_num]
